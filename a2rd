@@ -1,0 +1,45 @@
+#!/bin/bash
+
+hosts_file=${1:-hosts.ini}
+out_file=${2:-rundeck-resources.yml}
+tmp_dir="/tmp/a2rd-$RANDOM-$RANDOM"
+
+# echo "hosts_file = $hosts_file"
+# echo "out_file = $out_file"
+# echo "tmp_dir = $tmp_dir"
+
+function usage() {
+    cat <<EOM
+
+Use: a2rd [hosts_file [out_file]]
+    hosts_file - (default: hosts.ini) ansible hosts ini
+    out_file - (default: rundeck-resources.yml) rundeck resources yaml output
+
+EOM
+}
+
+function cleanup() {
+    echo "cleanup temp $tmp_dir"
+    [ -d "$tmp_dir" ] && rm -r "$tmp_dir"
+}
+
+function throw() {
+    usage
+    echo "ERR: $@" >&2
+    cleanup
+    exit 1
+}
+
+[ -f "$hosts_file" ] || throw "Hosts file not found!"
+
+echo "Creating temp dir $tmp_dir"
+mkdir -p "$tmp_dir"
+
+echo "Gathering facts from $hosts_file"
+ansible all -i $hosts_file -m setup --tree "$tmp_dir"
+
+echo "Processing facts from $tmp_dir --> $out_file"
+here=$(dirname ${BASH_SOURCE[0]})
+echo -e "---\n# generated from ansible hosts\n# by `whoami`\n# on `date`\n" > $out_file
+python ${here}/a2rd.py "$tmp_dir" >> $out_file
+cleanup
